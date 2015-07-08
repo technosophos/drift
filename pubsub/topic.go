@@ -12,18 +12,40 @@ import (
 	"github.com/Masterminds/cookoo"
 )
 
-type Topic interface {
-	Publish([]byte) error
-	Subscribe(*Subscription)
-	Unsubscribe(*Subscription)
-	Name() string
+// ResponseWriterFlusher handles both HTTP response writing and flushing.
+//
+// We use this simply to declare which interfaces we require support for.
+type ResponseWriterFlusher interface {
+	http.ResponseWriter
+	http.Flusher
 }
 
+// Topic is the main channel for sending messages to subscribers.
+//
+// A publisher is anything that sends a message to a Topic. All
+// attached subscribers will receive that message.
+type Topic interface {
+	// Publish sends a message to all subscribers.
+	Publish([]byte) error
+	// Subscribe attaches a subscription to this topic.
+	Subscribe(*Subscription)
+	// Unsubscribe detaches a subscription from the topic.
+	Unsubscribe(*Subscription)
+	// Name returns the topic name.
+	Name() string
+	// Subscribers returns a list of subscriptions attached to this topic.
+	Subscribers() []*Subscription
+}
+
+// History provides access too the last N messages on a particular Topic.
 type History interface {
+	// Last provides access to up to N messages.
 	Last(int) [][]byte
+	// Since provides access to all messages in history since the given time.
 	Since(time.Time) [][]byte
 }
 
+// HistoriedTopic is a topic that has an attached history.
 type HistoriedTopic interface {
 	History
 	Topic
@@ -64,7 +86,7 @@ func (t *channeledTopic) Publish(msg []byte) error {
 			fmt.Printf("Channel appears to be closed. Skipping.\n")
 			continue
 		}
-		fmt.Printf("Sending msg to subscriber %d: %s\n", s.Id, msg)
+		//fmt.Printf("Sending msg to subscriber %d: %s\n", s.Id, msg)
 		s.Queue <- msg
 	}
 	fmt.Printf("Message sent.\n")
@@ -79,7 +101,7 @@ func (t *channeledTopic) Subscribe(s *Subscription) {
 		fmt.Printf("Surprisingly got the same ID as an existing subscriber.")
 	}
 	t.subscribers[s.Id] = s
-	fmt.Printf("There are now %d subscribers", len(t.subscribers))
+	//fmt.Printf("There are now %d subscribers", len(t.subscribers))
 }
 
 func (t *channeledTopic) Unsubscribe(s *Subscription) {
@@ -92,13 +114,28 @@ func (t *channeledTopic) Name() string {
 	return t.name
 }
 
+func (t *channeledTopic) Subscribers() []*Subscription {
+	c := len(t.subscribers)
+	s := make([]*Subscription, 0, c)
+	for _, v := range t.subscribers {
+		s = append(s, v)
+	}
+	return s
+}
+
+// Subscription describes a subscriber.
+//
+// A subscription attaches to ONLY ONE Topic.
 type Subscription struct {
 	Id     uint64
-	Writer http.ResponseWriter
+	Writer ResponseWriterFlusher
 	Queue  chan []byte
 }
 
-func NewSubscription(r http.ResponseWriter) *Subscription {
+// NewSubscription creates a new subscription.
+//
+//
+func NewSubscription(r ResponseWriterFlusher) *Subscription {
 	// Queue depth should be revisited.
 	q := make(chan []byte, 10)
 	return &Subscription{
@@ -114,13 +151,13 @@ func (s *Subscription) Listen(until <-chan bool) {
 		//for msg := range s.Queue {
 		select {
 		case msg := <-s.Queue:
-			fmt.Printf("Forwarding message.\n")
+			//fmt.Printf("Forwarding message.\n")
 			// Queue is always serial, and this should be the only writer to the
 			// RequestWriter, so we don't explicitly sync right now.
 			s.Writer.Write(msg)
-			s.Writer.(http.Flusher).Flush()
+			s.Writer.Flush()
 		case <-until:
-			fmt.Printf("Subscription ended.\n")
+			//fmt.Printf("Subscription ended.\n")
 			return
 		default:
 		}

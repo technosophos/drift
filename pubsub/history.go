@@ -44,7 +44,7 @@ func (h *historyTopic) Since(t time.Time) [][]byte {
 
 	accumulator := [][]byte{}
 
-	for v := h.buffer.Front(); v != nil; v.Next() {
+	for v := h.buffer.Front(); v != nil; v = v.Next() {
 		e, ok := v.Value.(*entry)
 		if !ok {
 			// Skip anything that's not an entry.
@@ -66,7 +66,7 @@ func (h *historyTopic) Since(t time.Time) [][]byte {
 func (h *historyTopic) Last(n int) [][]byte {
 	acc := make([][]byte, 0, n)
 	i := 0
-	for v := h.buffer.Front(); v != nil; v.Next() {
+	for v := h.buffer.Front(); v != nil; v = v.Next() {
 		e, ok := v.Value.(*entry)
 		if !ok {
 			// Skip anything that's not an entry.
@@ -98,7 +98,8 @@ func (h *historyTopic) add(msg []byte) {
 }
 
 // Publish stores this msg as history and then forwards the publish request to the Topic.
-func (h *historyTopic) Publish(msg []byte) {
+func (h *historyTopic) Publish(msg []byte) error {
 	h.add(msg)
 	h.Topic.Publish(msg)
+	return nil
 }

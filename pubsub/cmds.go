@@ -71,7 +71,7 @@ func Subscribe(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrup
 		return nil, errors.New("No topic is set.")
 	}
 
-	rw := c.Get("http.ResponseWriter", nil).(http.ResponseWriter)
+	rw := c.Get("http.ResponseWriter", nil).(ResponseWriterFlusher)
 	clientGone := rw.(http.CloseNotifier).CloseNotify()
 
 	sub := NewSubscription(rw)
