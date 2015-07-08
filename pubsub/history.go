@@ -1,0 +1,90 @@
+package pubsub
+
+import (
+	"container/list"
+	"sync"
+	"time"
+)
+
+var DefaultMaxHistory = 1000
+
+// historyTopic maintains the history for a channel.
+type historyTopic struct {
+	Topic
+	buffer *list.List
+	max    int
+	mx     sync.Mutex
+}
+
+type entry struct {
+	msg []byte
+	ts  time.Time
+}
+
+func TrackHistory(t Topic, maxLen int) HistoryTopic {
+	return &historyTopic{
+		Topic:  t,
+		buffer: list.New(),
+		max:    maxLen,
+	}
+}
+
+// Since fetches an array of history entries.
+//
+// The entries will be in order, oldest to newest. And the list will not
+// exceed the maximum number of histry items.
+//
+// If the history list grows beyond its max size, the history list is pruned,
+// oldest to youngest.
+func (h *historyTopic) Since(t time.Time) [][]byte {
+
+	accumulator := [][]byte{}
+
+	for v := h.buffer.Front(); v != nil; v.Next() {
+		e, ok := v.Value.(*entry)
+		if !ok {
+			// Skip anything that's not an entry.
+			continue
+		}
+		if e.ts.After(t) {
+			accumulator = append(accumulator, e.msg)
+		} else {
+			return accumulator
+		}
+	}
+	return accumulator
+}
+
+func (h *historyTopic) Last(n int) [][]byte {
+	acc := make([][]byte, 0, n)
+	i := 0
+	for v := h.buffer.Front(); v != nil; v.Next() {
+		e, ok := v.Value.(*entry)
+		if !ok {
+			// Skip anything that's not an entry.
+			continue
+		}
+		if i < n {
+			acc = append(acc, e.msg)
+		} else {
+			return acc
+		}
+		i++
+	}
+	return acc
+}
+
+func (h *historyTopic) Add(msg []byte) {
+	h.mx.Lock()
+	defer h.mx.Unlock()
+	e := &entry{
+		msg: msg,
+		ts:  time.Now(),
+	}
+
+	h.buffer.PushFront(e)
+
+	for h.buffer.Len() > h.max {
+		h.buffer.Remove(h.buffer.Back())
+	}
+}
