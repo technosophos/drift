@@ -24,6 +24,8 @@ that may be higher than we want).
 **This library is not stable. The interfaces may change before the 0.1
 release**
 
+**Currently, the library ONLY supports HTTPS.**
+
 ## Installation
 
 ```
