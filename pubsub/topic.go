@@ -81,6 +81,7 @@ func (t *channeledTopic) Publish(msg []byte) error {
 			fmt.Printf("Recovered from failed publish. Some messages probably didn't get through. %s\n", err)
 		}
 	}()
+
 	for _, s := range t.subscribers {
 		if s.Queue == nil {
 			fmt.Printf("Channel appears to be closed. Skipping.\n")
@@ -89,7 +90,7 @@ func (t *channeledTopic) Publish(msg []byte) error {
 		//fmt.Printf("Sending msg to subscriber %d: %s\n", s.Id, msg)
 		s.Queue <- msg
 	}
-	fmt.Printf("Message sent.\n")
+	//fmt.Printf("Message sent.\n")
 	return nil
 }
 
@@ -115,6 +116,8 @@ func (t *channeledTopic) Name() string {
 }
 
 func (t *channeledTopic) Subscribers() []*Subscription {
+	t.mx.Lock()
+	defer t.mx.Unlock()
 	c := len(t.subscribers)
 	s := make([]*Subscription, 0, c)
 	for _, v := range t.subscribers {
@@ -145,7 +148,10 @@ func NewSubscription(r ResponseWriterFlusher) *Subscription {
 	}
 }
 
-func (s *Subscription) Listen(until <-chan bool) {
+// Listen copies messages fromt the Queue into the Writer.
+//
+// It listens on the Queue unless the `stop` channel receives a message.
+func (s *Subscription) Listen(stop <-chan bool) {
 	// s.Queue <- []byte("SUBSCRIBED")
 	for {
 		//for msg := range s.Queue {
@@ -156,7 +162,7 @@ func (s *Subscription) Listen(until <-chan bool) {
 			// RequestWriter, so we don't explicitly sync right now.
 			s.Writer.Write(msg)
 			s.Writer.Flush()
-		case <-until:
+		case <-stop:
 			//fmt.Printf("Subscription ended.\n")
 			return
 		default:
@@ -164,10 +170,12 @@ func (s *Subscription) Listen(until <-chan bool) {
 	}
 }
 
+// Close closes things and cleans up.
 func (s *Subscription) Close() {
 	close(s.Queue)
 }
 
+// getMedium fetches the Medium from the Datasources list.
 func getMedium(c cookoo.Context) (*Medium, error) {
 	ds, ok := c.HasDatasource(MediumDS)
 	if !ok {
@@ -176,6 +184,7 @@ func getMedium(c cookoo.Context) (*Medium, error) {
 	return ds.(*Medium), nil
 }
 
+// NewMedium creates and initializes a Medium.
 func NewMedium() *Medium {
 	return &Medium{
 		topics: make(map[string]Topic, 256), // Premature optimization...
@@ -183,22 +192,32 @@ func NewMedium() *Medium {
 }
 
 // Medium handles channeling messages to topics.
+//
+// You should always create one with NewMedium or else you will not be able
+// to add new topics.
 type Medium struct {
 	topics map[string]Topic
 	mx     sync.Mutex
 }
 
+// Topic gets a Topic by name.
+//
+// If no topic is found, the ok flag will return false.
 func (m *Medium) Topic(name string) (Topic, bool) {
 	t, ok := m.topics[name]
 	return t, ok
 }
 
+// Add a new Topic to the Medium.
 func (m *Medium) Add(t Topic) {
 	m.topics[t.Name()] = t
 }
 
 var lastSubId uint64 = 0
 
+// newSubId returns an atomically incremented ID.
+//
+// This can probably be done better.
 func newSubId() uint64 {
 	z := atomic.AddUint64(&lastSubId, uint64(1))
 	// FIXME: And when we hit max? Rollover?

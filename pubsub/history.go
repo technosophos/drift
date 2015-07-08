@@ -90,10 +90,10 @@ func (h *historyTopic) add(msg []byte) {
 		ts:  time.Now(),
 	}
 
-	h.buffer.PushFront(e)
+	h.buffer.PushBack(e)
 
 	for h.buffer.Len() > h.max {
-		h.buffer.Remove(h.buffer.Back())
+		h.buffer.Remove(h.buffer.Front())
 	}
 }
 

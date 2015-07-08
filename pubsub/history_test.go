@@ -16,8 +16,8 @@ func TestHistory(t *testing.T) {
 	if len(short) != 1 {
 		t.Errorf("Expected 1 in list, got %d", len(short))
 	}
-	if string(short[0]) != "f" {
-		t.Errorf("Expected 'f', got '%s'", short[0])
+	if string(short[0]) != "b" {
+		t.Errorf("Expected 'b', got '%s'", short[0])
 	}
 
 	long := topic.Last(6)
@@ -26,8 +26,7 @@ func TestHistory(t *testing.T) {
 	}
 
 	str := string(bytes.Join(long, []byte("")))
-	if str != "fedcb" {
-		t.Errorf("Expected fedbc, got %s", str)
+	if str != "bcdef" {
+		t.Errorf("Expected bcdef, got %s", str)
 	}
-
 }
