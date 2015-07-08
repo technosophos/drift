@@ -21,7 +21,11 @@ type entry struct {
 	ts  time.Time
 }
 
-func TrackHistory(t Topic, maxLen int) HistoryTopic {
+// TrackHistory takes an existing topic and adds history tracking.
+//
+// The mechanism for history tracking is a doubly linked list no longer than
+// maxLen.
+func TrackHistory(t Topic, maxLen int) HistoriedTopic {
 	return &historyTopic{
 		Topic:  t,
 		buffer: list.New(),
@@ -55,6 +59,10 @@ func (h *historyTopic) Since(t time.Time) [][]byte {
 	return accumulator
 }
 
+// Last fetches the last n items from the history, regardless of their time.
+//
+// Of course, it will return fewer than n if n is larger than the max length
+// or if the total stored history is less than n.
 func (h *historyTopic) Last(n int) [][]byte {
 	acc := make([][]byte, 0, n)
 	i := 0
@@ -74,7 +82,7 @@ func (h *historyTopic) Last(n int) [][]byte {
 	return acc
 }
 
-func (h *historyTopic) Add(msg []byte) {
+func (h *historyTopic) add(msg []byte) {
 	h.mx.Lock()
 	defer h.mx.Unlock()
 	e := &entry{
@@ -87,4 +95,10 @@ func (h *historyTopic) Add(msg []byte) {
 	for h.buffer.Len() > h.max {
 		h.buffer.Remove(h.buffer.Back())
 	}
+}
+
+// Publish stores this msg as history and then forwards the publish request to the Topic.
+func (h *historyTopic) Publish(msg []byte) {
+	h.add(msg)
+	h.Topic.Publish(msg)
 }

@@ -24,16 +24,25 @@ type History interface {
 	Since(time.Time) [][]byte
 }
 
-type HistoryTopic interface {
+type HistoriedTopic interface {
 	History
 	Topic
 }
 
+// NewTopic creates a new Topic with no history capabilities.
 func NewTopic(name string) Topic {
-	return &channeledTopic{
+	ct := &channeledTopic{
 		name:        name,
 		subscribers: make(map[uint64]*Subscription, 512), // Sane default space?
 	}
+	return ct
+}
+
+// NewHistoriedTopic creates a new HistoriedTopic.
+//
+// This topic will retain `length` history items for the topic.
+func NewHistoriedTopic(name string, length int) HistoriedTopic {
+	return TrackHistory(NewTopic(name), length)
 }
 
 type channeledTopic struct {
