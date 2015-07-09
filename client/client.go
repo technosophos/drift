@@ -103,7 +103,7 @@ func (s *Subscriber) setHeaders(req *http.Request) {
 	if s.History.Len > 0 {
 		req.Header.Add("X-History-Length", fmt.Sprintf("%d", s.History.Len))
 	}
-	if !s.History.Since.After(time.Time{}) {
+	if s.History.Since.After(time.Unix(0, 0)) {
 		req.Header.Add("X-History-Since", fmt.Sprintf("%d", s.History.Since.Unix()))
 	}
 }

@@ -134,7 +134,6 @@ func ReplayHistory(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Inte
 		if err != nil {
 			c.Logf("info", "failed to parse X-History-Length %s", max)
 		} else {
-			c.Logf("info", "Maxlen: %d", m)
 			maxLen = m
 		}
 	}
@@ -144,7 +143,6 @@ func ReplayHistory(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Inte
 			c.Logf("warn", "Failed to parse X-History-Since field %s: %s", since, err)
 			return 0, nil
 		}
-		c.Logf("info", "Since: %s", ts)
 		toSend := topic.Since(ts)
 
 		// If maxLen is also set, we trim the list by sending the newest.
@@ -155,11 +153,9 @@ func ReplayHistory(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Inte
 		}
 		return sendHistory(c, res, toSend)
 	} else if maxLen > 0 {
-		c.Logf("info", "Sending lengthed history.")
 		toSend := topic.Last(maxLen)
 		return sendHistory(c, res, toSend)
 	}
-	c.Logf("info", "No history returned.")
 
 	return 0, nil
 }
