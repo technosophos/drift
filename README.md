@@ -37,6 +37,40 @@ $ glide init
 From there, you can build the server (`go build server/server.go`) or
 the example client (`go build client/client.go`).
 
+## Simple Client Example
+
+To use Drift as a client, import the client library:
+
+```go
+import "github.com/technosophos/drift/client"
+```
+
+Here is a simple publisher:
+
+```go
+p := client.NewPublisher("https://localhost:5500")
+p.Publish("example", []byte("Hello World"))
+```
+
+The above sends the "Hello World" message over the `example` topic.
+
+A subscriber looks like this:
+
+```go
+s := client.NewSubscriber("https://localhost:5500")
+stream, err := s.Subscribe("example")
+if err != nil {
+  fmt.Printf("Failed subscription: %s", err)
+  return
+}
+
+// Now listen on a stream.
+for msg := range stream {
+  fmt.Printf("Received: %s\n", msg)
+}
+```
+
+
 
 ## API
 
