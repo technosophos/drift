@@ -5,6 +5,7 @@ package pubsub
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,11 +17,11 @@ const MediumDS = "drift.Medium"
 
 const (
 	// XHistorySince is an HTTP header for the client to send a request for history since TIMESTAMP.
-	XHistorySince = "X-History-Since"
+	XHistorySince = "x-history-since"
 	// XHistoryLength is an HTTP header for the client to send a request for the last N records.
-	XHistoryLength = "X-History-Length"
+	XHistoryLength = "x-history-length"
 	// XHistoryEnabled is a flag for the server to notify the client whether history is enabled.
-	XHistoryEnabled = "X-History-Enabled"
+	XHistoryEnabled = "x-history-enabled"
 )
 
 // Publish sends a new message to a topic.
@@ -133,6 +134,7 @@ func ReplayHistory(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Inte
 		if err != nil {
 			c.Logf("info", "failed to parse X-History-Length %s", max)
 		} else {
+			c.Logf("info", "Maxlen: %d", m)
 			maxLen = m
 		}
 	}
@@ -142,25 +144,28 @@ func ReplayHistory(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Inte
 			c.Logf("warn", "Failed to parse X-History-Since field %s: %s", since, err)
 			return 0, nil
 		}
+		c.Logf("info", "Since: %s", ts)
 		toSend := topic.Since(ts)
 
 		// If maxLen is also set, we trim the list by sending the newest.
 		ls := len(toSend)
 		if maxLen > 0 && ls > maxLen {
 			offset := ls - maxLen - 1
-			toSend := toSend[offset:]
-			return sendHistory(c, res, toSend)
+			toSend = toSend[offset:]
 		}
+		return sendHistory(c, res, toSend)
 	} else if maxLen > 0 {
 		c.Logf("info", "Sending lengthed history.")
 		toSend := topic.Last(maxLen)
 		return sendHistory(c, res, toSend)
 	}
+	c.Logf("info", "No history returned.")
 
 	return 0, nil
 }
 
 func sendHistory(c cookoo.Context, writer ResponseWriterFlusher, data [][]byte) (int, error) {
+	c.Logf("info", "Sending history.")
 	var i int
 	var d []byte
 	for i, d = range data {
@@ -175,7 +180,11 @@ func sendHistory(c cookoo.Context, writer ResponseWriterFlusher, data [][]byte) 
 }
 
 func parseSince(s string) (time.Time, error) {
-	return time.Now(), errors.New("no time")
+	tint, err := strconv.ParseInt(s, 0, 64)
+	if err != nil {
+		return time.Unix(0, 0), fmt.Errorf("Could not parse as time: %s", s)
+	}
+	return time.Unix(tint, 0), nil
 }
 
 func parseHistLen(s string) (int, error) {
@@ -192,13 +201,4 @@ func fetchOrCreateTopic(m *Medium, name string, hist bool, l int) Topic {
 		m.Add(t)
 	}
 	return t
-}
-
-func parseTime(t string) (time.Time, error) {
-	s, err := strconv.ParseInt(t, 0, 64)
-	if err != nil {
-		return time.Unix(0, 0), err
-	}
-
-	return time.Unix(s, 0), err
 }

@@ -113,6 +113,13 @@ func buildRegistry(reg *cookoo.Registry, router *cookoo.Router, cxt cookoo.Conte
 		Help: "Subscribe to a channel.",
 		Does: cookoo.Tasks{
 			cookoo.Cmd{
+				Name: "history",
+				Fn:   pubsub.ReplayHistory,
+				Using: []cookoo.Param{
+					{Name: "topic", From: "path:2"},
+				},
+			},
+			cookoo.Cmd{
 				Name: "subscribe",
 				Fn:   pubsub.Subscribe,
 				Using: []cookoo.Param{

@@ -54,7 +54,7 @@ func (p *Publisher) Publish(topic string, message []byte) error {
 // Subscriber defines a client that subscribes to a topic on a PubSub.
 type Subscriber struct {
 	Url     string
-	History History
+	History *History
 	Header  http.Header
 }
 

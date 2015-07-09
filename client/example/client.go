@@ -52,7 +52,7 @@ func main() {
 	case "subscribe":
 		//subscribe()
 		s := client.NewSubscriber("https://localhost:5500")
-		s.History = client.History{Len: 5}
+		s.History = &client.History{Len: 5}
 		stream, err := s.Subscribe("example")
 		if err != nil {
 			fmt.Printf("Failed subscription: %s", err)
