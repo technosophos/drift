@@ -105,3 +105,17 @@ Create a new topic named `TOPIC`.
 
 The body of this message is a well-defined JSON data structure that
 describes the topic.
+
+`GET /v1/time`
+
+Get the current time. This returns a plain text value with nothing but a
+timestamp.
+
+```
+$ curl -k https://localhost:5500/v1/time
+1436464998
+```
+
+The purpose of this callback is to give client libries a timestamp to
+use as the base time for calculating dates. This can reduce problems
+with clock skew.
