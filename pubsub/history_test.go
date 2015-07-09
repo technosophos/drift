@@ -3,6 +3,7 @@ package pubsub
 import (
 	"bytes"
 	"testing"
+	"time"
 )
 
 func TestHistory(t *testing.T) {
@@ -29,4 +30,24 @@ func TestHistory(t *testing.T) {
 	if str != "bcdef" {
 		t.Errorf("Expected bcdef, got %s", str)
 	}
+}
+
+func TestHistorySince(t *testing.T) {
+	topic := NewHistoriedTopic("test", 5)
+
+	now := time.Now()
+
+	for _, s := range []string{"a", "b", "c", "d", "e", "f"} {
+		topic.Publish([]byte(s))
+		// Current resolution on timer is at seconds.
+		time.Sleep(time.Second)
+	}
+
+	since := topic.Since(now)
+
+	str := string(bytes.Join(since, []byte("")))
+	if str != "bcdef" {
+		t.Errorf("Expected bcdef, got %s", str)
+	}
+
 }
