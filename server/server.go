@@ -3,13 +3,10 @@
 package main
 
 import (
-	"fmt"
-	"io"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/Masterminds/cookoo"
+	cfmt "github.com/Masterminds/cookoo/fmt"
 	"github.com/Masterminds/cookoo/web"
 
 	"github.com/technosophos/drift/httputil"
@@ -17,6 +14,19 @@ import (
 
 	"github.com/bradfitz/http2"
 )
+
+var helpTemplate = `<html>
+<head>
+<title>API Reference</title>
+<body>
+<h1>API Reference</h1>
+<p>These are the API endpoints currently defined for this server.</p>
+<dl>{{ range .Routes }}
+	<dn>{{.Name}}</dn>
+	<dd>{{.Description}}</dd>
+{{end}}</dl>
+</body>
+</html>`
 
 func main() {
 	srv := &http.Server{
@@ -30,6 +40,7 @@ func main() {
 	// Our main datasource is the Medium, which manages channels.
 	m := pubsub.NewMedium()
 	cxt.AddDatasource(pubsub.MediumDS, m)
+	cxt.Add("routes", reg.Routes())
 
 	http2.ConfigureServer(srv, &http2.Server{})
 
@@ -74,19 +85,39 @@ func buildRegistry(reg *cookoo.Registry, router *cookoo.Router, cxt cookoo.Conte
 
 	reg.AddRoute(cookoo.Route{
 		Name: "GET /",
-		Help: "Main page",
+		Help: "API Reference",
 		Does: cookoo.Tasks{
 			cookoo.Cmd{
-				Name: "debug",
-				Fn:   Debug,
+				Name: "help",
+				Fn:   cfmt.Template,
+				Using: []cookoo.Param{
+					{Name: "template", DefaultValue: helpTemplate},
+					{Name: "Routes", From: "cxt:routes"},
+				},
+			},
+			cookoo.Cmd{
+				Name: "_",
+				Fn:   web.Flush,
+				Using: []cookoo.Param{
+					{Name: "content", From: "cxt:help"},
+					{Name: "contentType", DefaultValue: "text/html"},
+				},
 			},
 		},
 	})
 
 	reg.AddRoute(cookoo.Route{
 		Name: "PUT /v1/t/*",
-		Help: "Create a new channel.",
-		Does: cookoo.Tasks{},
+		Help: "Create a new topic.",
+		Does: cookoo.Tasks{
+			cookoo.Cmd{
+				Name: "topic",
+				Fn:   pubsub.CreateTopic,
+				Using: []cookoo.Param{
+					{Name: "topic", From: "path:2"},
+				},
+			},
+		},
 	})
 
 	reg.AddRoute(cookoo.Route{
@@ -134,65 +165,4 @@ func buildRegistry(reg *cookoo.Registry, router *cookoo.Router, cxt cookoo.Conte
 		Help: "Delete a channel.",
 		Does: cookoo.Tasks{},
 	})
-
-	reg.Route("GET /tick", "Clock streamer demo").Does(ClockStreamer, "clock")
-}
-
-func simplePage(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("Got here.\n")
-	fmt.Fprintf(w, "Test.")
-}
-
-// Debug displays debugging info.
-func Debug(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
-	w := c.Get("http.ResponseWriter", nil).(http.ResponseWriter)
-	r := c.Get("http.Request", nil).(*http.Request)
-	reqInfoHandler(w, r)
-	return nil, nil
-}
-func reqInfoHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintf(w, "Method: %s\n", r.Method)
-	fmt.Fprintf(w, "Protocol: %s\n", r.Proto)
-	fmt.Fprintf(w, "Host: %s\n", r.Host)
-	fmt.Fprintf(w, "RemoteAddr: %s\n", r.RemoteAddr)
-	fmt.Fprintf(w, "RequestURI: %q\n", r.RequestURI)
-	fmt.Fprintf(w, "URL: %#v\n", r.URL)
-	fmt.Fprintf(w, "Body.ContentLength: %d (-1 means unknown)\n", r.ContentLength)
-	fmt.Fprintf(w, "Close: %v (relevant for HTTP/1 only)\n", r.Close)
-	fmt.Fprintf(w, "TLS: %#v\n", r.TLS)
-	fmt.Fprintf(w, "\nHeaders:\n")
-	r.Header.Write(w)
-}
-
-// ClockStreamer streams a clock, based on hte h2demo in http2 repo.
-//
-// Params:
-//
-// Returns:
-//
-func ClockStreamer(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
-	w := c.Get("http.ResponseWriter", nil).(http.ResponseWriter)
-	//r := c.Get("http.Request", nil).(*http.Request)
-
-	clientGone := w.(http.CloseNotifier).CloseNotify()
-	w.Header().Set("Content-Type", "text/plain")
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	// Flush buffer
-	io.WriteString(w, strings.Repeat("# xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n", 13))
-
-	// Try this 50 times
-	for i := 0; i < 50; i++ {
-		fmt.Fprintf(w, "%v\n", time.Now())
-		w.(http.Flusher).Flush()
-		select {
-		case <-ticker.C:
-		case <-clientGone:
-			c.Logf("info", "Client gone.")
-			return nil, nil
-		}
-	}
-	return nil, nil
 }

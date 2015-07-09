@@ -90,6 +90,35 @@ func Subscribe(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrup
 	return nil, nil
 }
 
+// CreateTopic creates a new topic.
+//
+// Params:
+// 	- name (string)
+// 	- history (bool): whether or not to track history
+// 	- historyLength (int): How much history to track. Default is DefaultMaxHistory.
+//
+// Returns:
+// 	Topic the new topic.
+func CreateTopic(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
+	name := p.Get("name", "").(string)
+	if len(name) == 0 {
+		return nil, &cookoo.FatalError{"Topic name required."}
+	}
+
+	hist := p.Get("history", true).(bool)
+	histLen := p.Get("historyLength", DefaultMaxHistory).(int)
+
+	m, err := getMedium(c)
+	if err != nil {
+		return nil, &cookoo.FatalError{"No medium."}
+	}
+
+	t := fetchOrCreateTopic(m, name, hist, histLen)
+
+	return t, nil
+
+}
+
 // ReplayHistory sends back the history to a subscriber.
 //
 // This should be called before the client goes into active listening.
@@ -160,6 +189,7 @@ func ReplayHistory(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Inte
 	return 0, nil
 }
 
+// sendHistory sends the accumulated history to the writer.
 func sendHistory(c cookoo.Context, writer ResponseWriterFlusher, data [][]byte) (int, error) {
 	c.Logf("info", "Sending history.")
 	var i int
@@ -175,6 +205,7 @@ func sendHistory(c cookoo.Context, writer ResponseWriterFlusher, data [][]byte) 
 	return i + 1, nil
 }
 
+// parseSince parses the X-History-Since value.
 func parseSince(s string) (time.Time, error) {
 	tint, err := strconv.ParseInt(s, 0, 64)
 	if err != nil {
@@ -183,10 +214,12 @@ func parseSince(s string) (time.Time, error) {
 	return time.Unix(tint, 0), nil
 }
 
+// parseHistLen parses the X-History-Length value.
 func parseHistLen(s string) (int, error) {
 	return strconv.Atoi(s)
 }
 
+// fetchOrCreateTopic gets a topic if it exists, and creates one if it doesn't.
 func fetchOrCreateTopic(m *Medium, name string, hist bool, l int) Topic {
 	t, ok := m.Topic(name)
 	if !ok {
