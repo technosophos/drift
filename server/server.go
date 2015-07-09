@@ -54,6 +54,25 @@ func buildRegistry(reg *cookoo.Registry, router *cookoo.Router, cxt cookoo.Conte
 	})
 
 	reg.AddRoute(cookoo.Route{
+		Name: "GET /v1/time",
+		Help: "Print the current server time as a UNIX seconds-since-epoch",
+		Does: cookoo.Tasks{
+			cookoo.Cmd{
+				Name: "timestamp",
+				Fn:   httputil.Timestamp,
+			},
+			cookoo.Cmd{
+				Name: "_",
+				Fn:   web.Flush,
+				Using: []cookoo.Param{
+					{Name: "content", From: "cxt:timestamp"},
+					{Name: "contentType", DefaultValue: "text/plain"},
+				},
+			},
+		},
+	})
+
+	reg.AddRoute(cookoo.Route{
 		Name: "GET /",
 		Help: "Main page",
 		Does: cookoo.Tasks{
