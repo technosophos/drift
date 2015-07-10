@@ -93,14 +93,14 @@ func Subscribe(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrup
 // CreateTopic creates a new topic.
 //
 // Params:
-// 	- name (string)
+// 	- topic (string)
 // 	- history (bool): whether or not to track history
 // 	- historyLength (int): How much history to track. Default is DefaultMaxHistory.
 //
 // Returns:
 // 	Topic the new topic.
 func CreateTopic(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
-	name := p.Get("name", "").(string)
+	name := p.Get("topic", "").(string)
 	if len(name) == 0 {
 		return nil, &cookoo.FatalError{"Topic name required."}
 	}
@@ -117,6 +117,60 @@ func CreateTopic(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interr
 
 	return t, nil
 
+}
+
+// DeleteTopic deletes a topic and its history.
+//
+// Params:
+// 	- name (string)
+//
+// Returns:
+//
+func DeleteTopic(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
+	name := p.Get("topic", "").(string)
+	if len(name) == 0 {
+		return nil, &cookoo.FatalError{"Topic name required."}
+	}
+
+	m, err := getMedium(c)
+	if err != nil {
+		return nil, &cookoo.FatalError{"No medium."}
+	}
+
+	err = m.Delete(name)
+	if err != nil {
+		c.Logf("warn", "Failed to delete topic: %s", err)
+	}
+
+	return nil, nil
+}
+
+// TopicExists tests whether a topic exists, and sends an HTTP 200 if yes, 404 if no.
+//
+// Params:
+// 	- topic (string): The topic to look up.
+// Returns:
+//
+func TopicExists(c cookoo.Context, p *cookoo.Params) (interface{}, cookoo.Interrupt) {
+	res := c.Get("http.ResponseWriter", nil).(ResponseWriterFlusher)
+	name := p.Get("topic", "").(string)
+	if len(name) == 0 {
+		res.WriteHeader(404)
+		return nil, nil
+	}
+
+	medium, err := getMedium(c)
+	if err != nil {
+		res.WriteHeader(404)
+		return nil, nil
+	}
+
+	if _, ok := medium.Topic(name); ok {
+		res.WriteHeader(200)
+		return nil, nil
+	}
+	res.WriteHeader(404)
+	return nil, nil
 }
 
 // ReplayHistory sends back the history to a subscriber.

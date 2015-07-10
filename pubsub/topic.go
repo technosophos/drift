@@ -18,6 +18,7 @@ import (
 type ResponseWriterFlusher interface {
 	http.ResponseWriter
 	http.Flusher
+	http.CloseNotifier
 }
 
 // Topic is the main channel for sending messages to subscribers.
@@ -35,6 +36,8 @@ type Topic interface {
 	Name() string
 	// Subscribers returns a list of subscriptions attached to this topic.
 	Subscribers() []*Subscription
+	// Close and destroy the topic.
+	Close() error
 }
 
 // History provides access too the last N messages on a particular Topic.
@@ -70,10 +73,25 @@ func NewHistoriedTopic(name string, length int) HistoriedTopic {
 type channeledTopic struct {
 	name        string
 	subscribers map[uint64]*Subscription
-	mx          sync.Mutex
+	mx          sync.RWMutex
+	closed      bool
+}
+
+func (t *channeledTopic) Close() error {
+	t.mx.Lock()
+	t.closed = true
+	for _, s := range t.subscribers {
+		s.Close()
+	}
+	t.subscribers = map[uint64]*Subscription{}
+	t.mx.Unlock()
+	return nil
 }
 
 func (t *channeledTopic) Publish(msg []byte) error {
+	if t.closed {
+		return errors.New("Topic is being deleted.")
+	}
 	t.mx.Lock()
 	defer func() {
 		t.mx.Unlock()
@@ -95,6 +113,9 @@ func (t *channeledTopic) Publish(msg []byte) error {
 }
 
 func (t *channeledTopic) Subscribe(s *Subscription) {
+	if t.closed {
+		return
+	}
 	t.mx.Lock()
 	defer t.mx.Unlock()
 	//t.subscribers = append(t.subscribers, s)
@@ -106,6 +127,9 @@ func (t *channeledTopic) Subscribe(s *Subscription) {
 }
 
 func (t *channeledTopic) Unsubscribe(s *Subscription) {
+	if t.closed {
+		return
+	}
 	t.mx.Lock()
 	defer t.mx.Unlock()
 	delete(t.subscribers, s.Id)
@@ -116,8 +140,8 @@ func (t *channeledTopic) Name() string {
 }
 
 func (t *channeledTopic) Subscribers() []*Subscription {
-	t.mx.Lock()
-	defer t.mx.Unlock()
+	t.mx.RLock()
+	defer t.mx.RUnlock()
 	c := len(t.subscribers)
 	s := make([]*Subscription, 0, c)
 	for _, v := range t.subscribers {
@@ -197,20 +221,37 @@ func NewMedium() *Medium {
 // to add new topics.
 type Medium struct {
 	topics map[string]Topic
-	mx     sync.Mutex
+	mx     sync.RWMutex
 }
 
 // Topic gets a Topic by name.
 //
 // If no topic is found, the ok flag will return false.
 func (m *Medium) Topic(name string) (Topic, bool) {
+	m.mx.RLock()
+	defer m.mx.RUnlock()
 	t, ok := m.topics[name]
 	return t, ok
 }
 
 // Add a new Topic to the Medium.
 func (m *Medium) Add(t Topic) {
+	m.mx.Lock()
 	m.topics[t.Name()] = t
+	m.mx.Unlock()
+}
+
+// Delete closes a topic and removes it.
+func (m *Medium) Delete(name string) error {
+	t, ok := m.topics[name]
+	if !ok {
+		return fmt.Errorf("Cannot delete. No topic named %s.", name)
+	}
+	t.Close()
+	m.mx.Lock()
+	delete(m.topics, name)
+	m.mx.Unlock()
+	return nil
 }
 
 var lastSubId uint64 = 0

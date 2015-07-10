@@ -81,7 +81,15 @@ func TestTopic(t *testing.T) {
 			t.Errorf("Expected Subscription %d to have 'hithere'. Got '%s'", s.Id, mw)
 		}
 
-		topic.Unsubscribe(s)
+		//topic.Unsubscribe(s)
+	}
+
+	if err := topic.Close(); err != nil {
+		t.Errorf("Error closing topic: %s", err)
+	}
+
+	if len(topic.Subscribers()) > 0 {
+		t.Errorf("After close, topic should have no subscribers. Got %d", len(topic.Subscribers()))
 	}
 
 }
@@ -163,6 +171,10 @@ func (r *mockResponseWriter) WriteHeader(c int) {
 }
 
 func (r *mockResponseWriter) Flush() {}
+
+func (r *mockResponseWriter) CloseNotify() <-chan bool {
+	return make(chan bool, 1)
+}
 
 // For benchmarking.
 type nilResponseWriter struct {

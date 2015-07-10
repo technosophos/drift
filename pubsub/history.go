@@ -103,3 +103,10 @@ func (h *historyTopic) Publish(msg []byte) error {
 	h.Topic.Publish(msg)
 	return nil
 }
+
+func (h *historyTopic) Close() error {
+	err := h.Topic.Close()
+	// We don't want nil pointers during shutdown.
+	h.buffer = list.New()
+	return err
+}

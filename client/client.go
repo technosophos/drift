@@ -15,6 +15,33 @@ import (
 
 const v1Path = "/v1/t/"
 
+// Client provides consumer functions for Drift.
+//
+// Client is the top-level object in the package.
+type Client struct {
+	Url string
+}
+
+func New(url string) *Client {
+	return &Client{
+		Url: url,
+	}
+}
+
+func (c *Client) Delete(topic string) error {
+
+	url := c.Url + path.Join(v1Path, topic)
+	t := &transport.Transport{InsecureTLSDial: true}
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = t.RoundTrip(req)
+	return err
+}
+
 type Publisher struct {
 	Url    string
 	Header http.Header
@@ -54,7 +81,7 @@ func (p *Publisher) Publish(topic string, message []byte) error {
 // Subscriber defines a client that subscribes to a topic on a PubSub.
 type Subscriber struct {
 	Url     string
-	History *History
+	History History
 	Header  http.Header
 }
 

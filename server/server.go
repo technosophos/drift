@@ -40,7 +40,7 @@ func main() {
 	// Our main datasource is the Medium, which manages channels.
 	m := pubsub.NewMedium()
 	cxt.AddDatasource(pubsub.MediumDS, m)
-	cxt.Add("routes", reg.Routes())
+	cxt.Put("routes", reg.Routes())
 
 	http2.ConfigureServer(srv, &http2.Server{})
 
@@ -161,8 +161,30 @@ func buildRegistry(reg *cookoo.Registry, router *cookoo.Router, cxt cookoo.Conte
 	})
 
 	reg.AddRoute(cookoo.Route{
+		Name: "HEAD /v1/t/*",
+		Help: "Check whether a topic exists.",
+		Does: cookoo.Tasks{
+			cookoo.Cmd{
+				Name: "has",
+				Fn:   pubsub.TopicExists,
+				Using: []cookoo.Param{
+					{Name: "topic", From: "path:2"},
+				},
+			},
+		},
+	})
+
+	reg.AddRoute(cookoo.Route{
 		Name: "DELETE /v1/t/*",
-		Help: "Delete a channel.",
-		Does: cookoo.Tasks{},
+		Help: "Delete a topic and close all subscriptions to the topic.",
+		Does: cookoo.Tasks{
+			cookoo.Cmd{
+				Name: "delete",
+				Fn:   pubsub.DeleteTopic,
+				Using: []cookoo.Param{
+					{Name: "topic", From: "path:2"},
+				},
+			},
+		},
 	})
 }
