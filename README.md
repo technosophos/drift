@@ -48,8 +48,8 @@ import "github.com/technosophos/drift/client"
 Here is a simple publisher:
 
 ```go
-p := client.NewPublisher("https://localhost:5500")
-p.Publish("example", []byte("Hello World"))
+c := client.New("https://localhost:5500")
+c.Publish("example", []byte("Hello World"))
 ```
 
 The above sends the "Hello World" message over the `example` topic.
@@ -57,22 +57,39 @@ The above sends the "Hello World" message over the `example` topic.
 A subscriber looks like this:
 
 ```go
-s := client.NewSubscriber("https://localhost:5500")
-stream, err := s.Subscribe("example")
+s := client.New("https://localhost:5500")
+subscription, err := s.Subscribe("example")
 if err != nil {
   fmt.Printf("Failed subscription: %s", err)
   return
 }
 
 // Now listen on a stream.
-for msg := range stream {
+for msg := range subscription.Stream {
   fmt.Printf("Received: %s\n", msg)
 }
+
+// When you're done...
+subscription.Cancel()
 ```
 
+A more advanced API is provided for configuring history and adding
+arbitrary HTTP headers.
 
+## About the Server
+
+The server lives in `server/server.go`. The basic server provides
+convenient features for getting running quickly.
+
+But the server was also designed as a composable system. You can easily
+take the parts here and add your own. Take a look at the registry in
+`server.server.go` to see how this is done.
 
 ## API
+
+`GET /`
+
+Prints a the runtime API documentation.
 
 `DELETE /v1/t/TOPIC`
 
