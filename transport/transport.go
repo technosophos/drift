@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bradfitz/http2"
 	"github.com/bradfitz/http2/hpack"
@@ -92,6 +93,24 @@ type clientStream struct {
 	// MPB: Allow option to send data frame over a channel.
 	dataToChan bool
 	data       chan []byte
+	cancel     chan bool
+}
+
+// Listener makes a stream into something that can be listened to.
+type Listener interface {
+	Stream() (chan []byte, error)
+	Cancel()
+}
+
+func (c *clientStream) Stream() (chan []byte, error) {
+	if !c.dataToChan {
+		return nil, errors.New("Listener has no data.")
+	}
+	return c.data, nil
+}
+
+func (c *clientStream) Cancel() {
+	c.cancel <- true
 }
 
 type stickyErrWriter struct {
@@ -137,7 +156,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return res, nil
 	}
 }
-func (t *Transport) Listen(req *http.Request) (*http.Response, chan []byte, error) {
+func (t *Transport) Listen(req *http.Request) (*http.Response, Listener, error) {
 	if req.URL.Scheme != "https" {
 		return nil, nil, errors.New("http2: unsupported scheme and no Fallback")
 	}
@@ -160,7 +179,7 @@ func (t *Transport) Listen(req *http.Request) (*http.Response, chan []byte, erro
 		if err != nil {
 			return nil, nil, err
 		}
-		return res, cs.data, nil
+		return res, cs, nil
 	}
 }
 
@@ -318,6 +337,7 @@ func (t *Transport) newClientConn(host, port, key string) (*clientConn, error) {
 	cc.hdec = hpack.NewDecoder(initialHeaderTableSize, cc.onNewHeaderField)
 
 	go cc.readLoop()
+	go cc.cancelLoop()
 	return cc, nil
 }
 
@@ -516,8 +536,9 @@ type resAndError struct {
 // requires cc.mu be held.
 func (cc *clientConn) newStream() *clientStream {
 	cs := &clientStream{
-		ID:   cc.nextStreamID,
-		resc: make(chan resAndError, 1),
+		ID:     cc.nextStreamID,
+		resc:   make(chan resAndError, 1),
+		cancel: make(chan bool, 1),
 	}
 	cc.nextStreamID += 2
 	cc.streams[cs.ID] = cs
@@ -532,6 +553,29 @@ func (cc *clientConn) streamByID(id uint32, andRemove bool) *clientStream {
 		delete(cc.streams, id)
 	}
 	return cs
+}
+
+func (cc *clientConn) cancelLoop() {
+	for {
+		// Find anything that needs to be removed and schedule it for removal.
+		remove := map[uint32]*clientStream{}
+		for streamID, cs := range cc.streams {
+			if len(cs.cancel) > 0 {
+				remove[streamID] = cs
+			}
+		}
+		// Run removals.
+		for streamID, cs := range remove {
+			log.Printf("Canceling %d\n", streamID)
+			if cs.dataToChan {
+				close(cs.data)
+			}
+			cs.pw.Close()
+			delete(cc.streams, streamID)
+		}
+		// Yield to GC.
+		time.Sleep(3 * time.Millisecond)
+	}
 }
 
 // runs in its own goroutine.
