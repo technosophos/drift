@@ -1,5 +1,7 @@
 # Drift: An HTTP/2 Pub/Sub service
 
+[![Stability: Experimental](https://masterminds.github.io/stability/experimental.svg)](https://masterminds.github.io/stability/experimental.html)
+
 Drift is a topic-based PubSub service based on HTTP/2. It uses HTTP/2's
 ability to stream data as a simple mechanism for managing subscriptions.
 
